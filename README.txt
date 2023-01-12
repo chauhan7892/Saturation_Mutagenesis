@@ -12,3 +12,9 @@ Personnel: Pankaj Chauhan
 Question: 
 Objective: 
 Outline: 
+
+
+
+## set the git master to github
+git remote add -u sm https://github.com/chauhan7892/Saturation_Mutagenesis.git
+

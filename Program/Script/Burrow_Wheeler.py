@@ -194,7 +194,7 @@ def approxPatternMatchFreq(text, patterns, d):
 def approxPatternMatchFreqWithClass(text, pickle_file, patterns_ids, d):
 
     if text[-1] != '$':
-        text = Text + '$'
+        text = text + '$'
 
     # alphabet = ['$', 'A', 'C', 'G', 'T']
     with open(pickle_file, 'rb') as f_pickle:
@@ -213,7 +213,7 @@ def approxPatternMatchFreqWithClass(text, pickle_file, patterns_ids, d):
         n = len(pattern)
         k = n // (d+1)
         seed_and_index_tuple = [(pattern[i*k:(i+1)*k], i*k) for i in range(d)] + [(pattern[d*k:n], d*k)]
-        for seed, seed_index in sseed_and_index_tuple:
+        for seed, seed_index in seed_and_index_tuple:
             top, bottom = bwMatching(seed, bwt, first_occur, count_dict)
             if top:
                 seed_pos = list((np.array(sa[top:bottom+1]) + len(bwt) -1)%len(bwt))

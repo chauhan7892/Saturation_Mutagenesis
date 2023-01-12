@@ -40,9 +40,9 @@ def mappingSeqBWT(text, patterns, dist = 2):
 
 def main( ):
 
-    start_time = datetime.now()
-    input_file = args_.input_argument
-    output_file = args_.output_argument
+	start_time = datetime.now()
+	input_file = args_.input_argument
+	output_file = args_.output_argument
 
 	## Files
 	wt_full_seq_file = input_file[0]
@@ -87,11 +87,11 @@ def main( ):
 		x = pool.apply(approxPatternMatchFreqWithClass, args=(text, pickle_file, chunk_ids, 2))
 		q.put(x) ## put the result into Queue
 
-	remaining_size = len(seq_IDs_list)%(processors)
+	remaining_size = len(seq_ids_list)%(processors)
 	if remaining_size > 0: # if True
 		remaining_chunk_ids = seq_ids_list[processors*each_processor_size:len(seq_ids_list)] # Get the leftover sequence Ids
 		# remaining_chunk = deep_map(lambda x: seq_dict[x], remaining_chunk_ids) 
-		x = approxPatternMatchFreqWithClass(Text, pickle_file, remaining_chunk_IDs, 2)
+		x = approxPatternMatchFreqWithClass(Text, pickle_file, remaining_chunk_ids, 2)
 		q.put(x)
 
 
@@ -125,4 +125,4 @@ if __name__ == "__main__":
 	parser.add_argument('-o', nargs='+', dest="output_argument",default="check outputs", help="write to a file")
 	args_ = parser.parse_args()
 	main(  )
-	print('done')
+	print('***** well done *****')
