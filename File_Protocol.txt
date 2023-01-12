@@ -1,0 +1,20 @@
+*****************************
+
+
+Date: 2023-01-12 12:04:38.431924
+Saturation_Mutagenesis
+Personnel: Pankaj Chauhan
+-----------------------------
+
+ 
+ 
+Objective: To name file names and programs in a consistant and organized way.
+Outline:
+        1) Run scripts form main folder to be consistant.
+
+        2) Input files and output files :
+        	Initialize all files from a single source with a same 2 captial letters code followed by underscore and file name.
+
+        3) Script : Initialize all scripts processing data with a same 2 captial letters code followed by underscore and its function.
+
+        4) Two letter codes full form:

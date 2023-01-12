@@ -1,0 +1,14 @@
+# Ignore everything in repository root 
+/*
+
+# Files to not ignore
+!/.gitignore
+!/README.txt
+!/log.txt
+!/File_Protocol.txt
+!/Index.txt
+
+# Folder to not ignore
+!/Program/
+
+
