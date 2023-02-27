@@ -1,11 +1,11 @@
-from Burrow_Wheeler import *
+from Burrow_Wheeler_sql import *
 from datetime import datetime 
 import os
 from multiprocessing import Pool, Queue
 import pandas as pd
 # import pdb
 import argparse
-
+import sqlite3
 
 def getSeqsFasta(filepath):
 	fasta_seq_dict = {}
@@ -29,10 +29,23 @@ def getSeqsFasta(filepath):
 
 	return fasta_seq_dict
 
-# def deep_map(func, some_list):
-#     if not isinstance(some_list, list):
-#         return func(some_list)
-#     return [deep_map(func, x) for x in some_list]
+
+# def write_dict_to_db(db_path, dict_data):
+# 	# connect to database
+# 	conn = sqlite3.connect(db_path)
+# 	cursor = conn.cursor()
+
+# 	# create table
+# 	cursor.execute('DROP TABLE IF EXISTS fasta_table ')
+# 	cursor.execute('CREATE TABLE IF NOT EXISTS fasta_table (seq_id TEXT PRIMARY KEY, seq TEXT)')
+# 	# write data to table
+# 	for key, value in dict_data.items():
+# 		cursor.execute('INSERT OR IGNORE INTO fasta_table (seq_id, seq) VALUES (?, ?)', (key, value))
+# 		# cursor.execute('UPDATE fasta_table SET seq = ? WHERE seq_id = ?', (value, key))
+# 	# commit changes and close connection
+# 	conn.commit()
+# 	cursor.close()
+# 	conn.close()
 
 
 def main( ):
@@ -42,77 +55,88 @@ def main( ):
 	input_file = args_.input_argument
 	output_file = args_.output_argument
 
-	## Files
-	wt_full_seq_file = input_file[0]
-	query_seqs_file = input_file[1]
-	pickle_file = input_file[2]
-	result_file = output_file[0]
-
-
 	## Suffix array index, aligner mismatch and CPU parameters
 	MULTIPLIER = 1
 	MISMATCH_LEN = int(parameters[0])
 	PROCESSORS = int(parameters[1])
 
+	## sqlite3 database
+	db_path = input_file[0] # sql database 'fasta_database.sqlite'
+	TABLE_NAME = input_file[1] ## table name "fasta_table"
+	SAMPLE = input_file[2]
+
+	## Files
+	wt_full_seq_file = input_file[3]
+	result_file = output_file[0]
 
 	## Read files
 	wt_dict = getSeqsFasta(wt_full_seq_file) # full gene
 	text = wt_dict[list(wt_dict.keys())[0]]
-	text_substring = ''
 
-	seq_dict = getSeqsFasta(query_seqs_file) # fasta reads 
-	seq_ids_list = list(seq_dict.keys())
+	## open the mysql database connection and create a cursor
+	conn = sqlite3.connect(db_path)
+	cursor = conn.cursor()
+	## select seq_id from the table where sample matches the input sample
+	# cursor.execute("SELECT seq_id FROM fasta_table WHERE sample = ?", (SAMPLE,)) ## hardcoded
+	cursor.execute(f"SELECT seq_id FROM {TABLE_NAME} WHERE sample = ?", (SAMPLE,)) ## variable table
+	seq_ids_tuple = cursor.fetchall()
+	seq_ids_list = [x for x, in seq_ids_tuple]
+	cursor.close()
+	conn.close()
 
 	# size of sequences Ids to be given to a processor
 	each_processor_size = len(seq_ids_list)//(PROCESSORS) 
 
 	## divide the sequences Ids accordingly
 	each_processor_chunk_ids = [seq_ids_list[i*each_processor_size:(i+1)*each_processor_size] for i in range(PROCESSORS)]  # get seq IDs
-	# each_processor_chunk = deep_map(lambda x: seq_dict[x], each_processor_chunk_ids) # get sequence values
 
 	# pdb.set_trace()  ### useful in tracing errors
 
-	## Open mutliprocessing pool 
+	# Open mutliprocessing pool 
 	pool = Pool(PROCESSORS)
 	q = Queue()
 
-	## open a file, where you want to store the pickle data
-	with open(pickle_file, 'wb') as f_pickle:
-	## dump information to that file
-		pickle.dump(seq_dict, f_pickle)
-
 	for chunk_ids in each_processor_chunk_ids:
-		x = pool.apply(approxPatternMatchFreqWithClass, args=(text, pickle_file, chunk_ids, MULTIPLIER, MISMATCH_LEN))
+		x = pool.apply(approxPatternMatchFreqWithClass, args=(db_path, TABLE_NAME, SAMPLE, text, chunk_ids, MULTIPLIER, MISMATCH_LEN))
 		q.put(x) ## put the result into Queue
 
 	remaining_size = len(seq_ids_list)%(PROCESSORS)
 	if remaining_size > 0: # if True
 		remaining_chunk_ids = seq_ids_list[PROCESSORS*each_processor_size:len(seq_ids_list)] # Get the leftover sequence Ids
-		# remaining_chunk = deep_map(lambda x: seq_dict[x], remaining_chunk_ids) 
-		x = approxPatternMatchFreqWithClass(text, pickle_file, remaining_chunk_ids, MULTIPLIER, MISMATCH_LEN)
+		x = approxPatternMatchFreqWithClass(db_path, TABLE_NAME, SAMPLE, text, remaining_chunk_ids, MULTIPLIER, MISMATCH_LEN)
 		q.put(x)
-
 
 	pool.close() ## close the multi-processing 
 	pool.join() ## join the outcomes from multi-processing
 	q.put(None) ## important: add a None flag to Queue
 
+
 	item_list = [q_item for sublist in iter(q.get, None) for q_item in sublist] ## get result class data
-	table = [[item.coord_position_first, item.seq_len, item.seq_id] for item in item_list]  ## make table (coordinate, sequence length, sequence ID)
+	pd_table = [[item.coord_position_first, item.seq_len, item.seq_id] for item in item_list]  ## make table (coordinate, sequence length, sequence ID)
 
-	# print(table)
-
-	df = pd.DataFrame(table, columns=['coord','seq_len','seq_id']) ## store in dataframe
+	df = pd.DataFrame(pd_table, columns=['coord','seq_len','seq_id']) ## store in dataframe
 	array_agg = lambda x: ','.join(x.astype(str)) ## function to concatenate
 	grp_df = df.groupby(['coord','seq_len']).agg({'seq_id': array_agg}) ## group sequences based on common coordinate and sequence length and concatenate
 
 	# print(grp_df)
 
+	# open the mysql database connection and create a cursor
+	conn = sqlite3.connect(db_path)
+	cursor = conn.cursor()
 	with open(result_file,'w') as f_out:
 		for index, row in grp_df.iterrows():
-			f_out.write('#WT %s\n%s\n' %(index[0], text[index[0]:index[0]+index[1]]))
+			# f_out.write(f'#WT {index[0]}-{index[0]+index[1]}\n') #Note indexing is zero based and save only coordinates 
+			# seq_ids = ('\t').join([seq_id for seq_id in row['seq_id'].split(',')])
+			# f_out.write(f'{seq_ids}\n\n')
+
+			f_out.write(f'#WT {index[0]}:{index[0]+index[1]}\n{text[index[0]:index[0]+index[1]]}\n') ## save coordinates and sequences too
 			for seq_id in row['seq_id'].split(','):
-				f_out.write('%s\n%s\n' %(seq_id, seq_dict[seq_id]))
+				cursor.execute(f"SELECT seq FROM {TABLE_NAME} WHERE (seq_id = ? AND sample = ?)", (seq_id, SAMPLE,))
+				fasta_seq = cursor.fetchone()[0]
+				f_out.write(f'{seq_id}\n{fasta_seq}\n')
+
+		cursor.close() ##  close cursor
+		conn.close() ## close database
 
 	end_time = datetime.now()
 	print(f"PROGRAM IS COMPLETED||Duration||H:M:S||{end_time - start_time}|")

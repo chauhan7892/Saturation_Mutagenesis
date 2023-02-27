@@ -1,4 +1,4 @@
-class MappedResult:
+class SequenceMappingInfo:
     # def __init__(self, seq_id, coord_position, seq_len, seq):
     def __init__(self, seq_id, coord_position, seq_len):
         self.seq_id = seq_id

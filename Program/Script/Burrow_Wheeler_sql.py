@@ -1,7 +1,7 @@
 import numpy as np
 from result_class import SequenceMappingInfo
-import pickle
-
+# import pickle
+import sqlite3
 
 # def bwtFun(text):
 #     index = sorted(range(len(text)), key = lambda i: (text + text)[(i + 1) :])
@@ -191,24 +191,34 @@ def approxPatternMatchFreq(text, patterns, MULTIPLIER, MISMATCH_LEN):
 
 # ***********************************************************
 
-def approxPatternMatchFreqWithClass(text, pickle_file, patterns_ids, MULTIPLIER, MISMATCH_LEN):
+
+def fasta_sql_data(cursor, TABLE_NAME, SAMPLE, q_seq_id):
+    cursor.execute(f"SELECT seq FROM {TABLE_NAME} WHERE (sample = ? AND seq_id = ?)", (SAMPLE, q_seq_id,))
+    fasta_seq = cursor.fetchone()[0]
+    return fasta_seq
+
+def approxPatternMatchFreqWithClass(db_path, TABLE_NAME, SAMPLE, text, patterns_ids, MULTIPLIER, MISMATCH_LEN):
 
     if text[-1] != '$':
         text = text + '$'
 
     # alphabet = ['$', 'A', 'C', 'G', 'T']
-    with open(pickle_file, 'rb') as f_pickle:
-        seq_dict = pickle.load(f_pickle)
+    # with open(pickle_file, 'rb') as f_pickle:
+    #     seq_dict = pickle.load(f_pickle)
 
     alphabet = list(set(text))
     sa = suffixArray(text, MULTIPLIER)
     bwt = bwtFromSuffixArray(text, sa = sa, MULTIPLIER = MULTIPLIER)
     count_dict = createCountDict(bwt, alphabet)
     first_occur = createFirstOccur(count_dict, alphabet, len(bwt))
-
     mapped_result_list = []
+
+    # open the mysql database connection and create a cursor
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
     for seq_id in patterns_ids:
-        pattern = seq_dict[seq_id]
+        pattern = fasta_sql_data(cursor, str(TABLE_NAME), str(SAMPLE), str(seq_id))
         pattern_indices = set()
         n = len(pattern)
         k = n // (MISMATCH_LEN+1)
@@ -232,5 +242,9 @@ def approxPatternMatchFreqWithClass(text, pickle_file, patterns_ids, MULTIPLIER,
         if pattern_indices:
             p = SequenceMappingInfo(seq_id,list(pattern_indices)[0],len(pattern)) # stored into class object
             mapped_result_list.append(p)
+
+    # close the cursor and database connection
+    cursor.close()
+    conn.close()
 
     return mapped_result_list
