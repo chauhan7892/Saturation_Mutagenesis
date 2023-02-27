@@ -31,7 +31,7 @@ def main( ):
                         f_out_fasta.write('>'+record['name'])
                         f_out_fasta.write(record['sequence'])
                     else:
-                        f_out_id.write(record['name'] + '\t' + str(phred_score) +'\n')
+                        f_out_id.write(record['name'] + '\t' + str(phred_score/len(quality)) +'\n')
 
                     lines = []
 
