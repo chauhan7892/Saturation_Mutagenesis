@@ -30,23 +30,8 @@ def getSeqsFasta(filepath):
 	return fasta_seq_dict
 
 
-# def write_dict_to_db(db_path, dict_data):
-# 	# connect to database
-# 	conn = sqlite3.connect(db_path)
-# 	cursor = conn.cursor()
-
-# 	# create table
-# 	cursor.execute('DROP TABLE IF EXISTS fasta_table ')
-# 	cursor.execute('CREATE TABLE IF NOT EXISTS fasta_table (seq_id TEXT PRIMARY KEY, seq TEXT)')
-# 	# write data to table
-# 	for key, value in dict_data.items():
-# 		cursor.execute('INSERT OR IGNORE INTO fasta_table (seq_id, seq) VALUES (?, ?)', (key, value))
-# 		# cursor.execute('UPDATE fasta_table SET seq = ? WHERE seq_id = ?', (value, key))
-# 	# commit changes and close connection
-# 	conn.commit()
-# 	cursor.close()
-# 	conn.close()
-
+### Requirement of sql table
+### TABLE {table_name} (sample TEXT, seq_id TEXT, seq TEXT, PRIMARY KEY (sample, seq_id))
 
 def main( ):
 
@@ -97,23 +82,19 @@ def main( ):
 	q = Queue()
 
 	for chunk_ids in each_processor_chunk_ids:
-		x = pool.apply(approxPatternMatchFreqWithClass, args=(db_path, TABLE_NAME, SAMPLE, text, chunk_ids, MULTIPLIER, MISMATCH_LEN))
-		q.put(x) ## put the result into Queue
-
+		pool.apply_async(approxPatternMatchFreqWithClass, args=(db_path, TABLE_NAME, SAMPLE, text, chunk_ids, MULTIPLIER, MISMATCH_LEN), callback=q.put)
+		
 	remaining_size = len(seq_ids_list)%(PROCESSORS)
 	if remaining_size > 0: # if True
 		remaining_chunk_ids = seq_ids_list[PROCESSORS*each_processor_size:len(seq_ids_list)] # Get the leftover sequence Ids
-		x = approxPatternMatchFreqWithClass(db_path, TABLE_NAME, SAMPLE, text, remaining_chunk_ids, MULTIPLIER, MISMATCH_LEN)
-		q.put(x)
-
+		pool.apply_async(approxPatternMatchFreqWithClass, args=(db_path, TABLE_NAME, SAMPLE, text, remaining_chunk_ids, MULTIPLIER, MISMATCH_LEN), callback=q.put)
+		
 	pool.close() ## close the multi-processing 
 	pool.join() ## join the outcomes from multi-processing
 	q.put(None) ## important: add a None flag to Queue
 
-
 	item_list = [q_item for sublist in iter(q.get, None) for q_item in sublist] ## get result class data
 	pd_table = [[item.coord_position_first, item.seq_len, item.seq_id] for item in item_list]  ## make table (coordinate, sequence length, sequence ID)
-
 	df = pd.DataFrame(pd_table, columns=['coord','seq_len','seq_id']) ## store in dataframe
 	array_agg = lambda x: ','.join(x.astype(str)) ## function to concatenate
 	grp_df = df.groupby(['coord','seq_len']).agg({'seq_id': array_agg}) ## group sequences based on common coordinate and sequence length and concatenate
