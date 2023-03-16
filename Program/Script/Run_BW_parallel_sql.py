@@ -99,25 +99,23 @@ def main( ):
 	array_agg = lambda x: ','.join(x.astype(str)) ## function to concatenate
 	grp_df = df.groupby(['coord','seq_len']).agg({'seq_id': array_agg}) ## group sequences based on common coordinate and sequence length and concatenate
 
-	# print(grp_df)
-
 	# open the mysql database connection and create a cursor
-	conn = sqlite3.connect(db_path)
-	cursor = conn.cursor()
+	# conn = sqlite3.connect(db_path)
+	# cursor = conn.cursor()
 	with open(result_file,'w') as f_out:
 		for index, row in grp_df.iterrows():
-			# f_out.write(f'#WT {index[0]}-{index[0]+index[1]}\n') #Note indexing is zero based and save only coordinates 
-			# seq_ids = ('\t').join([seq_id for seq_id in row['seq_id'].split(',')])
-			# f_out.write(f'{seq_ids}\n\n')
+			f_out.write(f'#{index[0]}:{index[0]+index[1]}\n') #Note indexing is zero based and save only coordinates 
+			seq_ids = ('\n').join([seq_id for seq_id in row['seq_id'].split(',')])
+			f_out.write(f'{str(seq_ids)}\n')
 
-			f_out.write(f'#WT {index[0]}:{index[0]+index[1]}\n{text[index[0]:index[0]+index[1]]}\n') ## save coordinates and sequences too
-			for seq_id in row['seq_id'].split(','):
-				cursor.execute(f"SELECT seq FROM {TABLE_NAME} WHERE (seq_id = ? AND sample = ?)", (seq_id, SAMPLE,))
-				fasta_seq = cursor.fetchone()[0]
-				f_out.write(f'{seq_id}\n{fasta_seq}\n')
+		# 	f_out.write(f'#WT {index[0]}:{index[0]+index[1]}\n{text[index[0]:index[0]+index[1]]}\n') ## save coordinates and sequences too
+		# 	for seq_id in row['seq_id'].split(','):
+		# 		cursor.execute(f"SELECT seq FROM {TABLE_NAME} WHERE (seq_id = ? AND sample = ?)", (seq_id, SAMPLE,))
+		# 		fasta_seq = cursor.fetchone()[0]
+		# 		f_out.write(f'{seq_id}\n{fasta_seq}\n')
 
-		cursor.close() ##  close cursor
-		conn.close() ## close database
+		# cursor.close() ##  close cursor
+		# conn.close() ## close database
 
 	end_time = datetime.now()
 	print(f"PROGRAM IS COMPLETED||Duration||H:M:S||{end_time - start_time}|")
