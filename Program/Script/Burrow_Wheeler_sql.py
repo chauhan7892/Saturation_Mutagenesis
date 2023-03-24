@@ -3,13 +3,6 @@ from result_class import SequenceMappingInfo
 # import pickle
 import sqlite3
 
-# def bwtFun(text):
-#     index = sorted(range(len(text)), key = lambda i: (text + text)[(i + 1) :])
-#     # print(index)
-#     sortlist = ('').join([text[i] for i in index])
-#     return sortlist
-
-
 # this array also acts as partial suffix array
 def suffixArray(text, MULTIPLIER = 1):
 
@@ -191,13 +184,36 @@ def approxPatternMatchFreq(text, patterns, MULTIPLIER, MISMATCH_LEN):
 
 # ***********************************************************
 
+def getSeqsFromFasta(filepath):
+	# fasta_seq_dict = OrderedDict()
+	fasta_seq_dict = {}
+	with open(filepath, 'r') as f:
+		seqs = []
+		header = ''
+		for line in f:
+			if line[0] == '\n':continue
+			line = line.strip('\n')
+			if line[0] == '>':
+				if header == '':
+					header = line
+					continue
+				else:
+					fasta_seq_dict[header] = ''.join(seqs)
+					seqs = []
+					header = line
+			else:
+				seqs.append(line)
+		fasta_seq_dict[header] = ''.join(seqs)
 
-def fasta_sql_data(cursor, TABLE_NAME, SAMPLE, q_seq_id):
-    cursor.execute(f"SELECT seq FROM {TABLE_NAME} WHERE (sample = ? AND seq_id = ?)", (SAMPLE, q_seq_id,))
+	return fasta_seq_dict
+
+
+def fasta_sql_data(cursor, TABLE_NAME, q_seq_id):
+    cursor.execute(f"SELECT seq FROM {TABLE_NAME} WHERE (seq_id = ?)", (q_seq_id,))
     fasta_seq = cursor.fetchone()[0]
     return fasta_seq
 
-def approxPatternMatchFreqWithClass(db_path, TABLE_NAME, SAMPLE, text, patterns_ids, MULTIPLIER, MISMATCH_LEN):
+def approxPatternMatchFreqWithClass(db_path, TABLE_NAME, text, patterns_ids, MULTIPLIER, MISMATCH_LEN):
 
     if text[-1] != '$':
         text = text + '$'
@@ -218,7 +234,7 @@ def approxPatternMatchFreqWithClass(db_path, TABLE_NAME, SAMPLE, text, patterns_
     cursor = conn.cursor()
 
     for seq_id in patterns_ids:
-        pattern = fasta_sql_data(cursor, str(TABLE_NAME), str(SAMPLE), str(seq_id))
+        pattern = fasta_sql_data(cursor, str(TABLE_NAME), str(seq_id))
         pattern_indices = set()
         n = len(pattern)
         k = n // (MISMATCH_LEN+1)

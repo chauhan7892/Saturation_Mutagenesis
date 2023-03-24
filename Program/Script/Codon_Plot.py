@@ -1,26 +1,29 @@
-
-import argparse
-import matplotlib.pyplot as plt  
+import argparse 
 import pandas as pd
 # from matplotlib.patches import Circle, Wedge
 from matplotlib import rc, rcParams
+from matplotlib.font_manager import FontProperties
+import matplotlib.pyplot as plt  
+import matplotlib.ticker as ticker
+from matplotlib.collections import PatchCollection
+
 import numpy as np
 from collections import OrderedDict
 import os
-# Latex features
-rc('text', usetex=True)
+# # Latex features
+rc('text', usetex=False)
 rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})   
 rc('axes', labelsize=20)
 rc('axes', titlesize=22)   # fontsize of the x and y labels
 rc('xtick', labelsize=14)    # fontsize of the tick labels
-rc('ytick', labelsize=14)    # fontsize of the tick labels
+rc('ytick', labelsize=8)    # fontsize of the tick labels
 rc('legend', fontsize=12)    # legend fontsize
-# plt.rc('figure', titlesize=25)  # fontsize of the figure title
-rcParams['font.size'] = '16'
-rcParams['text.latex.preamble'] = r'\usepackage{sfmath}'
-rcParams['ps.fonttype'] = 42
-rcParams['svg.fonttype'] = 'none' 
-# rcParams['text.latex.preamble']=[r"\usepackage{amsmath}"]
+# # plt.rc('figure', titlesize=25)  # fontsize of the figure title
+# rcParams['font.size'] = '16'
+# rcParams['text.latex.preamble'] = r'\usepackage{sfmath}'
+# rcParams['ps.fonttype'] = 42
+# rcParams['svg.fonttype'] = 'none' 
+# # rcParams['text.latex.preamble']=[r"\usepackage{amsmath}"]
 
 AA_col = {
 	'R':'green',
@@ -29,92 +32,93 @@ AA_col = {
 	'N':'black'
 }
 
-amino_acids = ['A', 'R', 'N', 'D', 'C', 'Q', 'E', 'G', 'H', 'I', 'L', 'K', 'M', 'F', 'P', 'S', 'T', 'W', 'Y', 'V']
+amino_acids = ['A', 'R', 'N', 'D', 'C', 'Q', 'E', 'G', 'H', 'I', 'L', 'K', 'M', 'F', 'P', 'S', 'T', 'W', 'Y', 'V', '*']
 
-def grid_plot(df1_final, feature_col, fig_dir, fig_specific_chunk, file):
-
-	fig_name = ('').join([fig_specific_chunk, file,'.pdf'])
-	fig_file = os.path.join(fig_dir, fig_name) 
-
-	row,col = df1_final.shape
-
-	y_label = df1_final.index.values
-	y_label[:] = y_label[::-1]
-	x_lablel = df1_final.columns.values
-
-	mat =np.ones([row, col, 3], dtype=np.uint8)*255
-	for i in range(row):
-		for j in range(col):
-			try:
-				mat[i,j,:]= np.asarray(df1_final.iloc[i,j],dtype=np.uint8)
-			except ValueError:
-				continue
-
-	leg1_loc = 'lower center'
-	fig, ax = plt.subplots(figsize=(15,8))
-	ax.set_xticks(0.5 +(np.arange(0,col,5)))
-	ax.tick_params('x', labelsize="x-small", which='major')
-	ax.set_xticklabels(x_lablel[::5])
-
-	ax.set_yticks(0.5 +(np.arange(row)))
-	ax.tick_params('y', labelsize="small", which='major')
-	ax.set_yticklabels(y_label)
-	plt.imshow(mat,extent=[0,col,0,row])
-	
-	plt.subplots_adjust(top=0.7)
-	plt.tight_layout()
-	plt.savefig(fig_file, dpi = 300)
-	# show the plot
-	plt.show()
 
 def main( ):
 	input_file = args_.input_argument
 	output_file = args_.output_argument
 
- 	# read foldx avg delta delta G file for all AA
-	foldx_data = pd.read_csv(input_file[0], sep = '\t', header = 0)
+	# read foldx avg delta delta G file for all AA
+	# define the columns to select
+	columns = ['Coord', 'Seq_Index', 'Mut_AA', 'WT_AA', 'AA_Freq', 'WT_AA_Freq']
 
-	fig_dir = output_file[0] # directory for figures output
-	fig_specific_chunk = output_file[1]
+	# create an iterator over the input file
+	df = pd.read_csv(input_file[0], sep='\t', usecols=columns)
+	filt_coord = ["134:209", "233:311", "23:111", "332:411", "434:511", "533:662"]
+	df['Coord_Start'] = df['Coord'].apply(lambda x: pd.Series(int(str(x).split(":")[0])))
+	df_filt = df[df['Coord'].isin(filt_coord)].sort_values(by = ['Coord_Start', 'Seq_Index'], ascending = [True, True]).reset_index(drop=True)
+	df_filt['Norm_AA_Freq'] = (df_filt['AA_Freq'] - df_filt['WT_AA_Freq']) /  df_filt['AA_Freq'].sum()
 
+	# Create a dataframe to store the last 'Seq_Index' value for each 'Coord' group
+	last_index_by_coord = df_filt.groupby('Coord',sort=False)['Seq_Index'].last()
 
-	# Fake amino acid coordinate dictionary for plotting
+	# Create a new column 'New_Seq_Index' for the updated 'Seq_Index' values
+	df_filt['New_Seq_Index'] = df_filt['Seq_Index']
+
+	balance_index = 0
+	# For each 'Coord' group after the first group, update the 'New_Seq_Index' values
+	for i in range(len(last_index_by_coord)):
+		df_filt.loc[df_filt['Coord'] == last_index_by_coord.index[i], 'New_Seq_Index'] = df_filt.loc[df_filt['Coord'] == last_index_by_coord.index[i], 'Seq_Index'] + balance_index
+		balance_index = balance_index + last_index_by_coord.iloc[i] + 1
+
+	# Drop the original 'Seq_Index' column and rename 'new_seq_index' to 'Seq_Index'
+	df_filt = df_filt.drop(['Coord', 'Coord_Start', 'Seq_Index', 'AA_Freq'], axis=1)
+
+	print(df_filt)
+	empty_data = np.zeros((len(amino_acids), int(df_filt['New_Seq_Index'].iat[-1])+1), dtype=float)
+	df_index = amino_acids
+	df_columns = list(range(int(df_filt['New_Seq_Index'].iat[-1])+1))
+	df_final = pd.DataFrame(empty_data, index = df_index, columns = df_columns)
+
+	# # iterate over each residues fraction range 
+	# # # new dataframe filled with residues of interest data subset
+	wt_amino_acid = []
+	wt_check = -1
+	for ii in range(df_filt.shape[0]):
+		subs_AA = df_filt['Mut_AA'][ii]
+		wt_AA = df_filt['WT_AA'][ii]
+		subs_Pos = df_filt['New_Seq_Index'][ii]
+		subs_value = df_filt['Norm_AA_Freq'][ii]
+		# subs_value = df_filt['AA_Freq'][ii]
+		if subs_AA == 'X':continue
+		df_final.at[subs_AA,subs_Pos]= subs_value
+		if subs_Pos != wt_check:
+			wt_amino_acid.append(wt_AA)
+			wt_check = subs_Pos
+
+	fig,ax = plt.subplots()
+	ax.set_xticks((np.arange(0, len(df_columns), 20)))
+	ax.tick_params('x',  which='major')
+
+	ax.set_yticks((np.arange(len(df_index))))
+	ax.tick_params('y', which='major')
+	ax.set_yticklabels(df_index)
+
+	coord_dict = {}
 	val = 0
-	coord_AA_dict = {}
-	sorted_keys = sorted(CN_AA, key=CN_AA.get)
-	for res in sorted_keys:		
-		coord_AA_dict[res] = val
+	for res in amino_acids:
+		coord_dict[res] = val
 		val += 1
 
-	# iterate over each residues fraction range 
+	im = plt.imshow(df_final,interpolation='nearest', origin = 'lower',alpha=0.7)
+	## mark WT
+	for i in range(df_final.shape[1]):
+		plt.scatter(i, coord_dict[wt_amino_acid[i]], color='red', s=5)
 
-	for file in input_file[1:]:
-		new_res_info = file.split('-')
-		new_res_start = int(new_res_info[0])-1 # current residues fraction start pos
-		new_res_end = int(new_res_info[1]) # residues fraction end pos
-		# foldx_data2 = foldx_data.copy()
-		df1 = foldx_data[(foldx_data['Position'] > new_res_start) & (foldx_data['Position'] <= new_res_end)]
-		df1 = df1.reset_index(drop=True)
-		# Empty character matrix to store values
-		new_res_len = new_res_end-new_res_start
+	figure = plt.gcf() # get current figure
+	figure.set_size_inches(len(df_columns)/1.5, len(df_index)/1.5)
+	# figure.set_size_inches(20, 10)
+	plt.subplots_adjust(bottom=0.4)
 
-		# empty_data = np.array((20,new_res_len))
-		empty_data = np.empty((20,new_res_len),dtype='str')
+	fig.colorbar(im, orientation="horizontal", pad=0.2, shrink = 0.3)
 
-		# new dataframe indexed by AA name and Columns by AA Position
-		columns1 = range(new_res_start+1,new_res_end+1,1)
-		index = sorted_keys
-		df1_final = pd.DataFrame(empty_data, index=index, columns=columns1)
+	plt.savefig(output_file[0], dpi = 300,bbox_inches='tight')
+	plt.show()
 
-		# # new dataframe filled with residues of interest data subset
-		for ii in range(df1.shape[0]):
-			subs_AA = df1['Mutation'][ii][-1]
-			subs_Pos = df1['Position'][ii]
-			subs_Feat = df1['Feature'][ii]
-			df1_final.at[subs_AA,subs_Pos]= feature_col[subs_Feat]# subs_Feat
+	    # write the result to the output file
+	df_final.to_csv(output_file[1], sep='\t')
 
-		# grid plot for the residues of interest
-		grid_plot(df1_final, feature_col, fig_dir, fig_specific_chunk, file)
 	tmp = output_file[0]
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description="A script to make plot")

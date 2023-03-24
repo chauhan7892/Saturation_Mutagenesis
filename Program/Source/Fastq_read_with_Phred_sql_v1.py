@@ -44,9 +44,8 @@ def main( ):
                         record_seq_id = '>'+record['seq_id'].strip('\n')
                         record_seq = record['seq'].strip('\n')
                         cursor.execute('INSERT OR IGNORE INTO fasta_table (sample, seq_id, seq) VALUES (?, ?, ?)', (SAMPLE, record_seq_id, record_seq))
-                        print('ok')
                     else:
-                        print(phred_score)
+                        #print(phred_score)
                         f_out_id.write(record['seq_id'].strip('\n')  + '\t' + str(phred_score/len(quality)) +'\n')
 
                     lines = [] ## empty the fastq data for next read

@@ -3,6 +3,13 @@ from result_class import SequenceMappingInfo
 # import pickle
 import sqlite3
 
+# def bwtFun(text):
+#     index = sorted(range(len(text)), key = lambda i: (text + text)[(i + 1) :])
+#     # print(index)
+#     sortlist = ('').join([text[i] for i in index])
+#     return sortlist
+
+
 # this array also acts as partial suffix array
 def suffixArray(text, MULTIPLIER = 1):
 
@@ -185,12 +192,12 @@ def approxPatternMatchFreq(text, patterns, MULTIPLIER, MISMATCH_LEN):
 # ***********************************************************
 
 
-def fasta_sql_data(cursor, TABLE_NAME, q_seq_id):
-    cursor.execute(f"SELECT seq FROM {TABLE_NAME} WHERE (seq_id = ?)", (q_seq_id,))
+def fasta_sql_data(cursor, TABLE_NAME, SAMPLE, q_seq_id):
+    cursor.execute(f"SELECT seq FROM {TABLE_NAME} WHERE (sample = ? AND seq_id = ?)", (SAMPLE, q_seq_id,))
     fasta_seq = cursor.fetchone()[0]
     return fasta_seq
 
-def approxPatternMatchFreqWithClass(db_path, TABLE_NAME, text, patterns_ids, MULTIPLIER, MISMATCH_LEN):
+def approxPatternMatchFreqWithClass(db_path, TABLE_NAME, SAMPLE, text, patterns_ids, MULTIPLIER, MISMATCH_LEN):
 
     if text[-1] != '$':
         text = text + '$'
@@ -211,7 +218,7 @@ def approxPatternMatchFreqWithClass(db_path, TABLE_NAME, text, patterns_ids, MUL
     cursor = conn.cursor()
 
     for seq_id in patterns_ids:
-        pattern = fasta_sql_data(cursor, str(TABLE_NAME), str(seq_id))
+        pattern = fasta_sql_data(cursor, str(TABLE_NAME), str(SAMPLE), str(seq_id))
         pattern_indices = set()
         n = len(pattern)
         k = n // (MISMATCH_LEN+1)

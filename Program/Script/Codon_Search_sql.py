@@ -39,29 +39,6 @@ codon_dict = {
 primers_list = ['CTACGGCTTCCAGCCCACAAAC','TGAAGCCTTTTGAGAGGGACATC','GACTTCACCGGCTGCGTGATC',\
     'CGTGTACGCCGACAGCTTTGTG','GCGTGGCCGACTATTCTGTGC','GCGGAGGGTCGGCTAGCCATATG']
 
-def getSeqsFromFasta(filepath):
-	# fasta_seq_dict = OrderedDict()
-	fasta_seq_dict = {}
-	with open(filepath, 'r') as f:
-		seqs = []
-		header = ''
-		for line in f:
-			if line[0] == '\n':continue
-			line = line.strip('\n')
-			if line[0] == '>':
-				if header == '':
-					header = line
-					continue
-				else:
-					fasta_seq_dict[header] = ''.join(seqs)
-					seqs = []
-					header = line
-			else:
-				seqs.append(line)
-		fasta_seq_dict[header] = ''.join(seqs)
-
-	return fasta_seq_dict
-
 
 def processAlignedIdsFile(file):
     seq_ids_dict = {}
@@ -88,7 +65,8 @@ def translateCodon(seq,seq_pos):
     codon_triplet = seq[seq_pos:seq_pos+3]
     codon_amino = codon_dict[codon_triplet]
     return codon_amino, codon_triplet
-
+    
+    
 def main( ):
 
     start_time = datetime.now()
@@ -98,23 +76,22 @@ def main( ):
 
     ## sqlite3 database
     db_path = input_file[0] # sql database 'fasta_database.sqlite'
-    TABLE_NAME = input_file[1] ## table name "fasta_table"
-    SAMPLE = input_file[2]
+    TABLE_NAME = input_file[1] ## table name "${SAMPLE_ID}"
 
-    wt_dict = getSeqsFromFasta(input_file[3])
+    wt_dict = getSeqsFromFasta(input_file[2])
     ref_seq = wt_dict[list(wt_dict.keys())[0]]
-    aligned_seqs_ids_dict = processAlignedIdsFile(input_file[4])
+    aligned_seqs_ids_dict = processAlignedIdsFile(input_file[3])
 
    # open the mysql database connection and create a cursor
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
-    with open(output_file[0],'w') as f_out:
-        f_out.write(f'Coord\tWT_codon\tWT_AA\tMut_codon\tMut_AA\tSeq_Index\tPrimer\n')
+    with open(output_file[0],'w') as f_out_codon, open(output_file[1],'w') as f_out_missing:
+        f_out_codon.write(f'Coord\tWT_codon\tWT_AA\tMut_codon\tMut_AA\tSeq_Index\tPrimer\n')
         for coord in tqdm(aligned_seqs_ids_dict):
-            start_ref = int(coord.split(":")[0])
-            end_ref = int(coord.split(":")[1])
-            text = ref_seq[start_ref:end_ref]
+            start_ref_coord = int(coord.split(":")[0])
+            end_ref_coord = int(coord.split(":")[1])
+            text = ref_seq[start_ref_coord:end_ref_coord]
             primer_indices = approxPatternMatchFreq(text, primers_list, 1, 0)
             start_primer = -1
             end_primer = -1
@@ -126,29 +103,28 @@ def main( ):
                     elif int(x[0]) > 10:
                         end_primer, end_coord, end_len = i, x[0], len(primers_list[i])
 
-            # print(start_primer, start_coord, start_len)
-            # print(end_primer, end_coord, end_len)
-            # print(text)
             for aligned_seq_id in aligned_seqs_ids_dict[coord]:
-                aligned_seq = fasta_sql_data(cursor, str(TABLE_NAME), str(SAMPLE), str(aligned_seq_id))
+                aligned_seq = fasta_sql_data(cursor, str(TABLE_NAME), str(aligned_seq_id))
                 if start_primer != -1 and end_primer == -1:
                     query_seq_used = aligned_seq[start_coord+start_len:]
                     ref_seq_used = text[start_coord+start_len:]
-                    coord_used = str(start_ref+start_len) + ":" + str(start_ref+start_len+len(ref_seq_used))
+                    coord_used = f"{start_ref_coord+start_len}:{start_ref_coord+start_len+len(ref_seq_used)}"
                     if start_primer == 4: 
                         query_seq_used = query_seq_used[2:]
                         ref_seq_used = ref_seq_used[2:]
-                        coord_used = str(start_ref+start_len+2) + ":" + str(start_ref+start_len+len(ref_seq_used))
+                        coord_used = f"{start_ref_coord+start_len+2}:{start_ref_coord+start_len+len(ref_seq_used)}"
                 elif start_primer  != -1 and end_primer != -1:
                     query_seq_used = aligned_seq[start_coord+start_len:end_coord]
                     ref_seq_used = text[start_coord+start_len:end_coord]
-                    coord_used = str(start_ref+start_len) + ":" + str(start_ref+start_len+len(ref_seq_used))
+                    coord_used = f"{start_ref_coord+start_len}:{start_ref_coord+start_len+len(ref_seq_used)}"
                     if start_primer == 4: 
                         query_seq_used = query_seq_used[2:]
                         ref_seq_used = ref_seq_used[2:]
-                        coord_used = str(start_ref+start_len+2) + ":" + str(start_ref+start_len+len(ref_seq_used))
-                # print(query_seq_used)
-                # print(ref_seq_used)
+                        coord_used = f"{start_ref_coord+start_len+2}:{start_ref_coord+start_len+len(ref_seq_used)}"
+                else:
+                    f_out_missing.write(f'{aligned_seq_id}\t{start_ref_coord}\n')
+                    f_out_missing.write(f'{aligned_seq}\n')
+                    continue
 
                 ### read the codon
                 codons_len = len(ref_seq_used)//3
@@ -164,7 +140,7 @@ def main( ):
                     except KeyError:
                         ref_codon_aa = 'X'
                         ref_codon_triplet = 'XXX'
-                    f_out.write(f"{coord_used}\t{ref_codon_triplet}\t{ref_codon_aa}\t{query_codon_triplet}\t{query_codon_aa}\t{int(current_index/3)}\t{start_primer}\n")
+                    f_out_codon.write(f"{coord_used}\t{ref_codon_triplet}\t{ref_codon_aa}\t{query_codon_triplet}\t{query_codon_aa}\t{int(current_index/3)}\t{start_primer}\n")
 
     # close the cursor and database connection
     cursor.close()
